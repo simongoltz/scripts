@@ -22,10 +22,8 @@ $authBody = @{
     client_secret = $client_secret
 }
 
-$encodedAuthBody = [System.Web.HttpUtility]::UrlEncode($authBody)
-
 $authUri = "https://config.private.zscaler.com/signin"
-$authRequest = Invoke-RestMethod -Uri $authUri -Method Post -Body $encodedAuthBody
+$authRequest = Invoke-RestMethod -Uri $authUri -Method Post -Body $authBody
 $token = $authRequest.access_token
 
 #Query API for Connector Status
