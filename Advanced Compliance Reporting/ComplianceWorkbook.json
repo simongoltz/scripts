@@ -1,0 +1,332 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+      {
+        "type": 9,
+        "content": {
+          "version": "KqlParameterItem/1.0",
+          "parameters": [
+            {
+              "id": "deeeef62-8652-449e-87f4-24388a88182e",
+              "version": "KqlParameterItem/1.0",
+              "name": "allsettings",
+              "type": 9,
+              "isRequired": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "query": "Compliance_Daily_V1_CL\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting_t\r\n| extend setting = strcat(\"'\",setting_t,\"'\")\r\n| distinct setting",
+              "value": [
+                "'ActiveFirewallRequired'",
+                "'AntiSpywareRequired'",
+                "'AntivirusRequired'",
+                "'BitLockerEnabled'",
+                "'DefenderEnabled'",
+                "'OsMinimumVersion'",
+                "'RtpEnabled'",
+                "'SignatureOutOfDate'",
+                "'TpmRequired'"
+              ],
+              "isHiddenWhenLocked": true,
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            },
+            {
+              "id": "b7e03e5b-594d-4366-b560-e902a53a97c6",
+              "version": "KqlParameterItem/1.0",
+              "name": "totaldevices",
+              "type": 1,
+              "isRequired": true,
+              "query": "Compliance_Daily_V1_CL\r\n| distinct deviceName_s\r\n| summarize count()",
+              "isHiddenWhenLocked": true,
+              "timeContext": {
+                "durationMs": 2592000000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces"
+            }
+          ],
+          "style": "pills",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces"
+        },
+        "name": "parameters - 7"
+      },
+      {
+        "type": 1,
+        "content": {
+          "json": "<div>\r\n<div style=\"float:left;\"><h1>Advanced Device Compliance</h1><p><ul><li>Requires Script, that gathers device Compliance Setting states daily from graph.</li><li> Use timechart es a filter, drill down devices.</li></ul>\r\n<h2>Total devices: {totaldevices}</div>\r\n<div style=\"float:right\"><a href=\"https://synalis.de\"><img src=\"https://www.synalis.de/wp-content/themes/synalis/assets/img/logo.svg\" height=\"75\"></a></div>\r\n</div>"
+        },
+        "name": "Text - 4"
+      },
+      {
+        "type": 3,
+        "content": {
+          "version": "KqlItem/1.0",
+          "query": "Compliance_Daily_V1_CL\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting\r\n| where userName_s != \"\"\r\n| where state_s == \"nonCompliant\"\r\n| distinct TimeGenerated,setting, deviceName_s, state_s\r\n| summarize count() by bin(TimeGenerated,1d), setting\r\n\r\n\r\n",
+          "size": 0,
+          "title": "Non compliance over time - last clicked data point selects filter date",
+          "timeContext": {
+            "durationMs": 2592000000
+          },
+          "exportParameterName": "datefilter",
+          "exportDefaultValue": "now",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces",
+          "visualization": "timechart"
+        },
+        "name": "query - 6"
+      },
+      {
+        "type": 3,
+        "content": {
+          "version": "KqlItem/1.0",
+          "query": "Compliance_Daily_V1_CL\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting\r\n| where userName_s != \"\"\r\n| project deviceName_s, state_s, setting, TimeGenerated\r\n| where state_s == \"nonCompliant\"\r\n| summarize Anzahl = count() by tostring(setting)\r\n\r\n\r\n\r\n",
+          "size": 0,
+          "title": "Summary non compliance per setting",
+          "timeContext": {
+            "durationMs": 2592000000
+          },
+          "exportMultipleValues": true,
+          "exportedParameters": [
+            {
+              "parameterName": "settingfilter",
+              "parameterType": 1,
+              "quote": "\""
+            }
+          ],
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces",
+          "visualization": "barchart",
+          "sortBy": []
+        },
+        "customWidth": "30",
+        "name": "Abfrage - 3",
+        "styleSettings": {
+          "padding": "10px"
+        }
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let pAllSettings = dynamic([{allsettings:label}]);\r\nlet pSettingFilter = dynamic([{settingfilter:$.label}]);\r\nlet devices = Compliance_Daily_V1_CL\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting\r\n| extend sfilter = iff(tostring(\"{settingfilter:$.x}\")==\"\",pAllSettings,pSettingFilter)\r\n| where setting in (iff(tostring(\"{settingfilter:$.x}\")==\"\",pAllSettings,pSettingFilter))\r\n| where userName_s != \"\"\r\n| where state_s == \"nonCompliant\"\r\n| distinct deviceName_s, setting \r\n| summarize Count = count() by deviceName_s\r\n| project-keep deviceName_s, Count\r\n| project-rename DeviceName = deviceName_s;\r\n\r\nCompliance_Daily_V1_CL\r\n| project-rename DeviceName = deviceName_s, DeviceModel = deviceModel_s\r\n| join devices on DeviceName, $left.DeviceName == $right.DeviceName\r\n| extend Link= strcat(\"https://endpoint.microsoft.com/#blade/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/compliance/mdmDeviceId/\", deviceId_g)\r\n| project-keep DeviceName, Count, DeviceModel, Link\r\n| sort by DeviceName\r\n\r\n\r\n\r\n\r\n",
+                "size": 0,
+                "title": "nonCompliant Settings per Device",
+                "exportFieldName": "DeviceName",
+                "exportParameterName": "DeviceName",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "DeviceName",
+                      "formatter": 1,
+                      "formatOptions": {
+                        "linkColumn": "Link",
+                        "linkTarget": "Url",
+                        "linkIsContextBlade": false
+                      }
+                    },
+                    {
+                      "columnMatch": "Link",
+                      "formatter": 5
+                    }
+                  ],
+                  "sortBy": [
+                    {
+                      "itemKey": "Count",
+                      "sortOrder": 2
+                    }
+                  ]
+                },
+                "sortBy": [
+                  {
+                    "itemKey": "Count",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "customWidth": "65",
+              "name": "Abfrage - 6"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Compliance_Daily_V1_CL\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting\r\n| where deviceName_s == '{DeviceName}'\r\n| where state_s == \"nonCompliant\"\r\n| distinct deviceName_s, setting\r\n| project-rename DeviceName = deviceName_s, Setting = setting",
+                "size": 0,
+                "title": "Device details: {DeviceName}",
+                "timeContext": {
+                  "durationMs": 86400000
+                },
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces"
+              },
+              "customWidth": "35",
+              "name": "Abfrage - 6",
+              "styleSettings": {
+                "padding": "0"
+              }
+            }
+          ]
+        },
+        "customWidth": "70",
+        "name": "Gruppe - 5"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Compliance_Daily_V1_CL\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting\r\n| distinct setting\r\n| project-rename Setting = setting\r\n| order by Setting asc\r\n",
+                "size": 0,
+                "exportFieldName": "Setting",
+                "exportParameterName": "csetting",
+                "exportDefaultValue": "BitLockerEnabled",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "sortBy": [],
+                "chartSettings": {
+                  "seriesLabelSettings": [
+                    {
+                      "seriesName": "Windows10CompliancePolicy.ActiveFirewallRequired",
+                      "label": "Firewall"
+                    },
+                    {
+                      "seriesName": "Windows10CompliancePolicy.BitLockerEnabled",
+                      "label": "Bitlocker"
+                    },
+                    {
+                      "seriesName": "Windows10CompliancePolicy.AntivirusRequired",
+                      "label": "Antivirus"
+                    },
+                    {
+                      "seriesName": "Windows10CompliancePolicy.TpmRequired",
+                      "label": "TPM"
+                    },
+                    {
+                      "seriesName": "Windows10CompliancePolicy.RtpEnabled",
+                      "label": "RTP"
+                    },
+                    {
+                      "seriesName": "Windows10CompliancePolicy.SignatureOutOfDate",
+                      "label": "Signature"
+                    },
+                    {
+                      "seriesName": "Windows10CompliancePolicy.DefenderEnabled",
+                      "label": "Defender"
+                    },
+                    {
+                      "seriesName": "Windows10CompliancePolicy.AntiSpywareRequired",
+                      "label": "Antispyware"
+                    }
+                  ]
+                }
+              },
+              "customWidth": "20",
+              "name": "query - 0"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "Compliance_Daily_V1_CL\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting\r\n| where setting == '{csetting}'\r\n| where userName_s != \"\"\r\n| distinct setting_s, deviceName_s, state_s\r\n| where state_s != \"unknown\"\r\n| summarize Anzahl = count() by state_s\r\n| render barchart\r\n\r\n\r\n\r\n\r\n",
+                "size": 0,
+                "title": "{csetting} Overview",
+                "exportMultipleValues": true,
+                "exportedParameters": [
+                  {
+                    "parameterName": "settingview",
+                    "parameterType": 1
+                  }
+                ],
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "sortBy": [],
+                "chartSettings": {
+                  "yAxis": [
+                    "Anzahl"
+                  ]
+                }
+              },
+              "customWidth": "30",
+              "name": "query - 3"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let psettingview = dynamic([{settingview:$.x}]); \r\nlet comp =Compliance_Daily_V1_CL\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| parse setting_s with \"Windows10CompliancePolicy.\" setting\r\n| where userName_s != \"\"\r\n| where setting == '{csetting}'\r\n| where state_s in (psettingview)\r\n| where userName_s != \"\"\r\n| distinct deviceName_s, state_s, setting\r\n| project-rename DeviceName = deviceName_s, Status = state_s, Einstellung = setting;\r\n\r\n\r\n\r\nCompliance_Daily_V1_CL\r\n| project-rename DeviceName = deviceName_s\r\n| join comp on DeviceName, $left.DeviceName == $right.DeviceName\r\n| extend Link= strcat(\"https://endpoint.microsoft.com/#blade/Microsoft_Intune_Devices/DeviceSettingsMenuBlade/compliance/mdmDeviceId/\", deviceId_g)\r\n| project-keep DeviceName, Link, Status, Einstellung\r\n| sort by DeviceName;\r\n\r\n",
+                "size": 0,
+                "title": "Devices",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "gridSettings": {
+                  "formatters": [
+                    {
+                      "columnMatch": "DeviceName",
+                      "formatter": 1,
+                      "formatOptions": {
+                        "linkColumn": "Link",
+                        "linkTarget": "Url"
+                      }
+                    },
+                    {
+                      "columnMatch": "Link",
+                      "formatter": 5
+                    },
+                    {
+                      "columnMatch": "Geraetename",
+                      "formatter": 1,
+                      "formatOptions": {
+                        "linkColumn": "Link",
+                        "linkTarget": "Url"
+                      }
+                    }
+                  ],
+                  "rowLimit": 1000,
+                  "filter": true
+                },
+                "sortBy": []
+              },
+              "customWidth": "50",
+              "name": "query - 1"
+            }
+          ],
+          "exportParameters": true
+        },
+        "customWidth": "100",
+        "name": "Gruppe - 4",
+        "styleSettings": {
+          "padding": "10px",
+          "showBorder": true
+        }
+      },
+      {
+        "type": 1,
+        "content": {
+          "json": "Licensed with CC-BY-SA. Copyright 2022 by [Simon Goltz](https://twitter.com/simongoltz) / [synalis GmbH & Co. KG](https://www.synalis.de). Use Github Repository https://github.com/simongoltz/scripts for bug fixes and features requests."
+        },
+        "name": "text - 6"
+      }
+    ],
+    "fallbackResourceIds": [
+      "/subscriptions/1fb7739d-c1cc-4544-b38f-923a7c04ecd8/resourceGroups/azureAdLogAnalytics/providers/Microsoft.OperationalInsights/workspaces/ComplianceReporting"
+    ],
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+  }
