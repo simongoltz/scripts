@@ -1,0 +1,242 @@
+{
+    "version": "Notebook/1.0",
+    "items": [
+      {
+        "type": 1,
+        "content": {
+          "json": "<div>\n<div style=\"float:left;\"><h1>Conditional Access Monitoring for Reporting Mode</h1><p><ul><li>Choose policy from dropdown</li><li> Use timechart es a filter to investigate issues</li></ul></div>\n<div style=\"float:right\"><a href=\"https://synalis.de\"><img src=\"https://www.synalis.de/wp-content/themes/synalis/assets/img/logo.svg\" height=\"75\"></a></div>\n</div>"
+        },
+        "customWidth": "100",
+        "name": "text - 2"
+      },
+      {
+        "type": 9,
+        "content": {
+          "version": "KqlParameterItem/1.0",
+          "parameters": [
+            {
+              "id": "39a6b6c0-b602-40ae-8e5c-a4eccfb16452",
+              "version": "KqlParameterItem/1.0",
+              "name": "Policy",
+              "type": 2,
+              "isRequired": true,
+              "isGlobal": true,
+              "multiSelect": true,
+              "quote": "'",
+              "delimiter": ",",
+              "query": "SigninLogs\r\n| mv-expand ConditionalAccessPolicies\r\n| extend policyName = ConditionalAccessPolicies[\"displayName\"] \r\n| distinct tostring(policyName)",
+              "value": [
+                "[wpn] Windows - Compliant Device"
+              ],
+              "typeSettings": {
+                "additionalResourceOptions": [],
+                "showDefault": false
+              },
+              "timeContext": {
+                "durationMs": 86400000
+              },
+              "queryType": 0,
+              "resourceType": "microsoft.operationalinsights/workspaces",
+              "label": "Select Policy"
+            }
+          ],
+          "style": "pills",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces"
+        },
+        "name": "parameters - 3"
+      },
+      {
+        "type": 3,
+        "content": {
+          "version": "KqlItem/1.0",
+          "query": "let pPolicy = dynamic([{Policy}]);\nSigninLogs\n| where ConditionalAccessPolicies != \"[]\"\n| mv-expand ConditionalAccessPolicies\n| extend displayName = ConditionalAccessPolicies[\"displayName\"], result = ConditionalAccessPolicies[\"result\"], browser = DeviceDetail[\"browser\"], deviceId = DeviceDetail[\"deviceId\"], failureReason = tostring(Status[\"failureReason\"])\n| where ConditionalAccessPolicies [\"displayName\"] in (pPolicy)\n| where ConditionalAccessPolicies [\"result\"] in (\"reportOnlyFailure\",\"reportOnlySuccess\",\"reportOnlyInterrupted\")\n| summarize count() by bin (TimeGenerated, 1d), tostring(ConditionalAccessPolicies[\"result\"]) ",
+          "size": 1,
+          "title": "Historic Data Success/Failure for {Policy}",
+          "timeContext": {
+            "durationMs": 2592000000
+          },
+          "exportFieldName": "",
+          "exportParameterName": "datefilter",
+          "exportDefaultValue": "now",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces",
+          "visualization": "timechart",
+          "chartSettings": {
+            "seriesLabelSettings": [
+              {
+                "seriesName": "reportOnlyFailure",
+                "color": "redBright"
+              },
+              {
+                "seriesName": "reportOnlySuccess",
+                "color": "green"
+              }
+            ]
+          }
+        },
+        "name": "query - 2"
+      },
+      {
+        "type": 12,
+        "content": {
+          "version": "NotebookGroup/1.0",
+          "groupType": "editable",
+          "title": "Failed Users and Reasons per selected date | Use as filter for details below",
+          "items": [
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let pPolicy = dynamic([{Policy}]);\r\nSigninLogs\r\n//| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| where ConditionalAccessPolicies != \"[]\"\r\n| mv-expand ConditionalAccessPolicies\r\n| extend PolicyName = ConditionalAccessPolicies[\"displayName\"], result = ConditionalAccessPolicies[\"result\"], BrowserDetail = DeviceDetail[\"browser\"], deviceId = DeviceDetail[\"deviceId\"], failureReason = tostring(Status[\"failureReason\"])\r\n| extend KnownDevice = iif(isempty(tostring(deviceId)),\"No\",\"Yes\")\r\n| where ConditionalAccessPolicies [\"displayName\"] in (pPolicy)\r\n| where ConditionalAccessPolicies [\"result\"] in (\"reportOnlyFailure\",\"reportOnlyInterrupted\")\r\n| summarize count() by tostring(ClientAppUsed)",
+                "size": 3,
+                "title": "Failed UsedClientApp",
+                "timeContext": {
+                  "durationMs": 604800000
+                },
+                "exportFieldName": "ClientAppUsed",
+                "exportParameterName": "filterClientAppUsed",
+                "exportDefaultValue": "ClientAppUsed",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "showBorder": false,
+                  "titleContent": {
+                    "columnMatch": "ClientAppUsed",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "count_",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    },
+                    "numberFormat": {
+                      "unit": 17,
+                      "options": {
+                        "maximumSignificantDigits": 3,
+                        "maximumFractionDigits": 2
+                      }
+                    }
+                  }
+                }
+              },
+              "customWidth": "15",
+              "name": "query - 1"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let pPolicy = dynamic([{Policy}]);\r\nSigninLogs\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| where ConditionalAccessPolicies != \"[]\"\r\n| mv-expand ConditionalAccessPolicies\r\n| extend PolicyName = ConditionalAccessPolicies[\"displayName\"], result = ConditionalAccessPolicies[\"result\"], browser = DeviceDetail[\"browser\"], deviceId = DeviceDetail[\"deviceId\"], failureReason = tostring(Status[\"failureReason\"])\r\n| where ConditionalAccessPolicies [\"displayName\"] in ({Policy})\r\n| where ConditionalAccessPolicies [\"result\"] in (\"reportOnlyFailure\",\"reportOnlyInterrupted\",\"reportOnlySuccess\")\r\n| project-reorder Identity, AppDisplayName, deviceId, browser, result, failureReason, PolicyName\r\n| summarize Failure = countif(result == \"reportOnlyFailure\"),\r\n            Interrupted = countif(result == \"reportOnlyInterrupted\"),\r\n            Successful = countif(result == \"reportOnlySuccess\")         \r\n         by Identity",
+                "size": 0,
+                "title": "Policy results per User",
+                "timeContext": {
+                  "durationMs": 604800000
+                },
+                "exportFieldName": "Identity",
+                "exportParameterName": "filterIdentity",
+                "exportDefaultValue": "Identity",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "gridSettings": {
+                  "sortBy": [
+                    {
+                      "itemKey": "Failure",
+                      "sortOrder": 2
+                    }
+                  ]
+                },
+                "sortBy": [
+                  {
+                    "itemKey": "Failure",
+                    "sortOrder": 2
+                  }
+                ]
+              },
+              "customWidth": "70",
+              "name": "query - 4"
+            },
+            {
+              "type": 3,
+              "content": {
+                "version": "KqlItem/1.0",
+                "query": "let pPolicy = dynamic([{Policy}]);\r\nSigninLogs\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| where ConditionalAccessPolicies != \"[]\"\r\n| mv-expand ConditionalAccessPolicies\r\n| extend PolicyName = ConditionalAccessPolicies[\"displayName\"], result = ConditionalAccessPolicies[\"result\"], BrowserDetail = DeviceDetail[\"browser\"], deviceId = DeviceDetail[\"deviceId\"], failureReason = tostring(Status[\"failureReason\"])\r\n| extend KnownDevice = iif(isempty(tostring(deviceId)),\"No\",\"Yes\")\r\n| where ConditionalAccessPolicies [\"displayName\"] in (pPolicy)\r\n| where ConditionalAccessPolicies [\"result\"] in (\"reportOnlyFailure\",\"reportOnlyInterrupted\")\r\n| extend Split = split(tostring(BrowserDetail),\" \")\r\n| mv-expand Browser = Split[0]\r\n| summarize count() by tostring(Browser)",
+                "size": 3,
+                "title": "Failed browser",
+                "timeContext": {
+                  "durationMs": 604800000
+                },
+                "exportFieldName": "Browser",
+                "exportParameterName": "filterBrowser",
+                "exportDefaultValue": "Browser",
+                "queryType": 0,
+                "resourceType": "microsoft.operationalinsights/workspaces",
+                "visualization": "tiles",
+                "tileSettings": {
+                  "titleContent": {
+                    "columnMatch": "Browser",
+                    "formatter": 1
+                  },
+                  "leftContent": {
+                    "columnMatch": "count_",
+                    "formatter": 12,
+                    "formatOptions": {
+                      "palette": "auto"
+                    }
+                  },
+                  "secondaryContent": {
+                    "columnMatch": "ClientAppUsed"
+                  },
+                  "showBorder": false
+                }
+              },
+              "customWidth": "15",
+              "name": "query - 0"
+            }
+          ],
+          "exportParameters": true
+        },
+        "name": "group1",
+        "styleSettings": {
+          "showBorder": true
+        }
+      },
+      {
+        "type": 3,
+        "content": {
+          "version": "KqlItem/1.0",
+          "query": "let pPolicy = dynamic([{Policy}]);\r\nSigninLogs\r\n| where startofday(TimeGenerated) == iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| extend cfilter = iff(tostring('{datefilter}')==\"now\",startofday(todatetime(now())),startofday(todatetime('{datefilter:$.x}')))\r\n| where ConditionalAccessPolicies != \"[]\"\r\n| mv-expand ConditionalAccessPolicies\r\n| extend PolicyName = ConditionalAccessPolicies[\"displayName\"], result = ConditionalAccessPolicies[\"result\"], Browser = DeviceDetail[\"browser\"], deviceId = DeviceDetail[\"deviceId\"], failureReason = tostring(Status[\"failureReason\"])\r\n| where ConditionalAccessPolicies [\"displayName\"] in (pPolicy)\r\n| where ConditionalAccessPolicies [\"result\"] in (\"reportOnlyFailure\",\"reportOnlyInterrupted\")\r\n| where Identity contains (iff(tostring('{filterIdentity}')==\"Identity\",\"\",\"{filterIdentity}\"))\r\n| where ClientAppUsed contains (iff(tostring('{filterClientAppUsed}')==\"ClientAppUsed\",\"\",\"{filterClientAppUsed}\"))\r\n| where Browser contains (iff(tostring('{filterBrowser}')==\"Browser\",\"\",\"{filterBrowser}\"))\r\n| project-reorder TimeGenerated, Identity, AppDisplayName, ClientAppUsed, deviceId, Browser, result, PolicyName, DeviceDetail, Location",
+          "size": 0,
+          "title": "Policy fails last 24h for {Policy}",
+          "timeContext": {
+            "durationMs": 604800000
+          },
+          "showExportToExcel": true,
+          "exportToExcelOptions": "all",
+          "queryType": 0,
+          "resourceType": "microsoft.operationalinsights/workspaces",
+          "gridSettings": {
+            "sortBy": [
+              {
+                "itemKey": "TimeGenerated",
+                "sortOrder": 1
+              }
+            ]
+          },
+          "sortBy": [
+            {
+              "itemKey": "TimeGenerated",
+              "sortOrder": 1
+            }
+          ]
+        },
+        "name": "query - 2"
+      }
+    ],
+    "fallbackResourceIds": [
+      "/subscriptions/1fb7739d-c1cc-4544-b38f-923a7c04ecd8/resourceGroups/azureAdLogAnalytics/providers/Microsoft.OperationalInsights/workspaces/azureAdLogAnalytics"
+    ],
+    "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+  }

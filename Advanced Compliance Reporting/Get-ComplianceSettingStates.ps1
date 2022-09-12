@@ -3,6 +3,7 @@ SCRIPTNAME: Get-ComplianceSettingStates.ps1
 AUTHOR: Simon Goltz
 COMPANY: synalis GmbH
 WEBSITE: https://www.synalis.de
+BLOG: https://simongoltz.com
 
 Last Updated: 11/09/2022
 Version 1.0
