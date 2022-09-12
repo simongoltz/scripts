@@ -233,6 +233,13 @@
           ]
         },
         "name": "query - 2"
+      },
+      {
+        "type": 1,
+        "content": {
+          "json": "Licensed with CC-BY-SA. Copyright 2022 by [Simon Goltz](https://twitter.com/simongoltz) / [synalis GmbH & Co. KG](https://www.synalis.de). Use Github Repository https://github.com/simongoltz/scripts for bug fixes and features requests."
+        },
+        "name": "text - 5"
       }
     ],
     "fallbackResourceIds": [
