@@ -1,6 +1,6 @@
 <#.  
 SCRIPTNAME: Get-ComplianceSettingStates.ps1
-AUTHORS: Simon Goltz
+AUTHOR: Simon Goltz
 COMPANY: synalis GmbH
 WEBSITE: https://www.synalis.de
 BLOG: https://simongoltz.com
@@ -52,8 +52,8 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Version History
-    11.09.2022: Initial Release
-    20.10.2022: Batch processing added - Mike van der Sluis
+    11.9.2022: Initial Release
+
 Please use the repo https://github.com/simongoltz/scripts for bug fixes and feature requests.
 #>
 
@@ -62,7 +62,7 @@ Please use the repo https://github.com/simongoltz/scripts for bug fixes and feat
 $workspaceId = Get-AutomationVariable -Name WorkSpaceID
 # Replace with your Primary Key
 $primaryKey = Get-AutomationVariable -Name PrimaryKey
-# Specify the name of the table that should be filled in Log Analytics
+# Specify the name of the table that should be filles in Log Analytics
 $logType = "Compliance_Daily_V1"
 $TimeStampField = ""
 
@@ -84,8 +84,7 @@ $requestBody = @{
     ContentType = 'Application/Json'
 }
 
-# Get All ComplianceSettingStates filtered for windows 
-# !!! note the 'back-tick': remove when using graph-explorer, add when used here !!!
+#Get All ComplianceSettingStates filtered for windows
 $resultComplianceSettingStates = Invoke-RestMethod @requestBody -uri "https://graph.microsoft.com/v1.0/deviceManagement/deviceCompliancePolicySettingStateSummaries?`$filter=platformType eq 'windows10AndLater'"
 
 $complianceSettingStates = $resultComplianceSettingStates.value.id
@@ -136,9 +135,6 @@ Function Post-LogAnalyticsData($workspaceId, $primaryKey, $body, $logType)
     return $response.StatusCode
 
 }
-
-# Function to process batches of 500 for every 
-# retrieved batch of at max 1000 objects
 Function Process-Batch($somereportStates)
 {
 	$x=0
@@ -156,7 +152,7 @@ Function Process-Batch($somereportStates)
 		}
 	}
 
-	if ($reportBatch.Count())
+	if ($reportBatch.Count)
 	{
 		#post the rest if any
 		Write-Output "Writing batch of $($reportBatch.Count()) items to Log Analytics..."
@@ -164,12 +160,15 @@ Function Process-Batch($somereportStates)
 	}
 }
 
-# Go through every setting state and get assigned devices + status 
-# in batches of max 1000 devices
-foreach ($complianceSettingState in $complianceSettingStates){
-
-    $statesUri = "https://graph.microsoft.com/v1.0/deviceManagement/deviceCompliancePolicySettingStateSummaries/$complianceSettingState/deviceComplianceSettingStates"
-    do { 
+# Go through every setting state and get assigned devices + status
+# we're running this every hour to prevent running out of time (max 3 hours)
+# 
+$HourOfDay=Get-Date -UFormat “%H”
+$complianceSettingState = $complianceSettingStates[$HourOfDay]
+if ($complianceSettingState)
+{
+	$statesUri = "https://graph.microsoft.com/v1.0/deviceManagement/deviceCompliancePolicySettingStateSummaries/$complianceSettingState/deviceComplianceSettingStates"
+	do { 
 		$states = Invoke-RestMethod @requestBody -uri $statesUri
 		$reportStates = $states.value
 		$statesUri = $states."@odata.nextLink"
