@@ -1,14 +1,15 @@
 <#.  
 SCRIPTNAME: Get-ComplianceSettingStates.ps1
-AUTHOR: Simon Goltz
+AUTHORS: Simon Goltz
 COMPANY: synalis GmbH
 WEBSITE: https://www.synalis.de
 BLOG: https://simongoltz.com
 
 Last Updated: 11/09/2022
 Version 1.0
+Version 1.1 - Mike van der Sluis, MyBestTools
 
-This script retreives compliance settings from Graph and ships it to log analytics. 
+This script retrieves compliance settings from Graph and ships it to log analytics. 
 It is supposed to run in an Azure Automation Workbook.
 
 Prerequisites:
@@ -51,23 +52,24 @@ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 Version History
-    11.9.2022: Initial Release
-
+    11.09.2022: Initial Release
+    20.10.2022: Batch processing added - Mike van der Sluis
 Please use the repo https://github.com/simongoltz/scripts for bug fixes and feature requests.
 #>
 
 # Azure Automation Variables
 # Replace with your Workspace ID
-$workspaceId = Get-AutomationVariable -Name WorkspaceId
+$workspaceId = Get-AutomationVariable -Name WorkSpaceID
 # Replace with your Primary Key
-$primaryKey = Get-AutomationVariable -Name primaryKey
-# Specify the name of the table that should be filles in Log Analytics
-$LogType = "Compliance_Daily_V1"
+$primaryKey = Get-AutomationVariable -Name PrimaryKey
+# Specify the name of the table that should be filled in Log Analytics
+$logType = "Compliance_Daily_V1"
+$TimeStampField = ""
 
 # Connect to Microsoft Graph API, fill in Variables from Automation Account
 $authparams = @{
-    ClientId = Get-AutomationVariable -Name ClientId
     TenantId = Get-AutomationVariable -Name TenantId
+    ClientId = Get-AutomationVariable -Name ClientId
     ClientSecret = (Get-AutomationVariable -Name ClientSecret | ConvertTo-SecureString -AsPlainText -Force)
 }
 $auth = Get-MsalToken @authParams
@@ -82,28 +84,12 @@ $requestBody = @{
     ContentType = 'Application/Json'
 }
 
-#Get All ComplianceSettingStates filtered for windows
+# Get All ComplianceSettingStates filtered for windows 
+# !!! note the 'back-tick': remove when using graph-explorer, add when used here !!!
 $resultComplianceSettingStates = Invoke-RestMethod @requestBody -uri "https://graph.microsoft.com/v1.0/deviceManagement/deviceCompliancePolicySettingStateSummaries?`$filter=platformType eq 'windows10AndLater'"
 
 $complianceSettingStates = $resultComplianceSettingStates.value.id
 $reportStates = @()
-
-#Go through every setting state and get assigned devices + status
-foreach ($complianceSettingState in $complianceSettingStates){
-
-    $statesUri = "https://graph.microsoft.com/v1.0/deviceManagement/deviceCompliancePolicySettingStateSummaries/$complianceSettingState/deviceComplianceSettingStates"
-    
-    do {
-    
-    $states = Invoke-RestMethod @requestBody -uri $statesUri
-    $reportStates += $states.value
-	$statesUri = $states."@odata.nextLink"
-
-    } while ($statesUri)
-
-}
-
-$reportStates = $reportStates | ConvertTo-Json
 
 # Create the function to create the authorization signature
 Function Build-Signature ($workspaceId, $primaryKey, $date, $contentLength, $method, $contentType, $resource)
@@ -123,7 +109,7 @@ Function Build-Signature ($workspaceId, $primaryKey, $date, $contentLength, $met
 }
 
 # Create the function to create and post the request
-Function Post-LogAnalyticsData($customerId, $primaryKey, $body, $logType)
+Function Post-LogAnalyticsData($workspaceId, $primaryKey, $body, $logType)
 {
     $method = "POST"
     $contentType = "application/json"
@@ -138,7 +124,7 @@ Function Post-LogAnalyticsData($customerId, $primaryKey, $body, $logType)
         -method $method `
         -contentType $contentType `
         -resource $resource
-    $uri = "https://" + $workspaceId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
+   	$uri = "https://" + $workspaceId + ".ods.opinsights.azure.com" + $resource + "?api-version=2016-04-01"
 
     $headers = @{
         "Authorization" = $signature;
@@ -146,11 +132,47 @@ Function Post-LogAnalyticsData($customerId, $primaryKey, $body, $logType)
         "x-ms-date" = $rfc1123date;
         "time-generated-field" = $TimeStampField;
     }
-
     $response = Invoke-WebRequest -Uri $uri -Method $method -ContentType $contentType -Headers $headers -Body $body -UseBasicParsing
     return $response.StatusCode
 
 }
 
-# Submit the data to the API endpoint
-Post-LogAnalyticsData -workspaceId $workspaceId -primaryKey $primaryKey -body ([System.Text.Encoding]::UTF8.GetBytes($reportStates)) -logType $logType
+# Function to process batches of 500 for every 
+# retrieved batch of at max 1000 objects
+Function Process-Batch($somereportStates)
+{
+	$x=0
+	$reportBatch = @()
+	foreach ($reportState in $somereportStates)
+	{
+		$x++
+		$reportBatch+=$reportState
+		if (($x%500) -eq 0)
+		{
+			Write-Output "Writing batch of 500 items to Log Analytics..."
+			$reportBatch = $reportBatch | ConvertTo-Json
+			Post-LogAnalyticsData -workspaceId $workspaceId -primaryKey $primaryKey -body ([System.Text.Encoding]::UTF8.GetBytes($reportBatch)) -logType $logType
+			$reportBatch = @()
+		}
+	}
+
+	if ($reportBatch.Count())
+	{
+		#post the rest if any
+		Write-Output "Writing batch of $($reportBatch.Count()) items to Log Analytics..."
+		Post-LogAnalyticsData -workspaceId $workspaceId -primaryKey $primaryKey -body ([System.Text.Encoding]::UTF8.GetBytes($reportBatch)) -logType $logType
+	}
+}
+
+# Go through every setting state and get assigned devices + status 
+# in batches of max 1000 devices
+foreach ($complianceSettingState in $complianceSettingStates){
+
+    $statesUri = "https://graph.microsoft.com/v1.0/deviceManagement/deviceCompliancePolicySettingStateSummaries/$complianceSettingState/deviceComplianceSettingStates"
+    do { 
+		$states = Invoke-RestMethod @requestBody -uri $statesUri
+		$reportStates = $states.value
+		$statesUri = $states."@odata.nextLink"
+		Process-Batch -somereportStates $reportStates
+	} while ($statesUri)
+}
