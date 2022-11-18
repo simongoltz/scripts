@@ -27,6 +27,7 @@ $authRequest = Invoke-RestMethod -Uri $authUri -Method Post -Body $authBody
 $token = $authRequest.access_token
 
 #Query API for Connector Status
+$requestHeader = @{Authorization = "Bearer $token"}
 $getConnector = "https://config.private.zscaler.com/mgmtconfig/v1/admin/customers/" + $customerId + "/connector/" + $connectorId
 $connector = Invoke-RestMethod -Uri $getConnector -Headers $requestHeader
 
